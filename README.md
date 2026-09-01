@@ -40,6 +40,10 @@ Every state change lands in an `events` audit table.
 6. **Public page isolation** — the client page is keyed by an unguessable UUID token and exposes only client-safe fields (no AI metadata, internal notes, or costs). All DB access goes through serverless functions with the service-role key; RLS is enabled with zero anon policies.
 7. **Async generation** — a 30–50s LLM call can't live inside a synchronous serverless function (the platform kills it mid-generation), so generation runs as a Netlify *background* function: the API answers 202 instantly, Claude works server-side, and the UI polls until the draft lands. Failures log a `generation_failed` event instead of vanishing.
 
+### Autopilot (off by default)
+
+The lead page has an opt-in **🤖 Autopilot** toggle: if a draft comes back with **zero** flagged lines — every item matched a real catalog code, every price inside its band, no low-confidence lines — it is sent to the client immediately, skipping the review queue. A *single* flag holds it for human review exactly as before (Slack notes "autopilot HELD it"), and garbage notes still refuse. This is confidence-gated automation: the guardrails don't relax, they become the gate. It ships **off** deliberately — at a $28K average ticket the right rollout is to earn trust with data first (e.g. after N approved proposals where the human changed nothing on zero-flag drafts), then enable it for that class.
+
 ## Cost
 
 `claude-sonnet-4-6` at $3/M input, $15/M output. A typical generation is ~4–5K input (catalog + notes) + ~1K output ≈ **$0.03/proposal** — tokens and dollar cost are logged per proposal and shown in the review UI. At 300 proposals/yr that's under $10/yr of inference against ~$500K+/yr of recovered revenue. Sonnet over Opus is deliberate: the task is constrained extraction + mapping with server-side validation and human review behind it, so top-shelf reasoning buys nothing here; Haiku was rejected because scope interpretation from messy field notes is exactly where the cheaper tier starts hallucinating quantities.

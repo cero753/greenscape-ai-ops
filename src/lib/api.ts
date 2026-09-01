@@ -22,10 +22,12 @@ export const api = {
 
   // Netlify background function: answers 202 immediately, Claude keeps
   // working server-side. The caller polls `lead()` until the draft appears.
-  startProposalGeneration: (lead_id: string, site_walk_notes: string) =>
+  // autopilot (off by default): auto-send the draft if it comes back with
+  // zero flagged lines; any flag holds it for human review as usual.
+  startProposalGeneration: (lead_id: string, site_walk_notes: string, autopilot = false) =>
     request<null>('/api/generate-proposal-background', {
       method: 'POST',
-      body: JSON.stringify({ lead_id, site_walk_notes }),
+      body: JSON.stringify({ lead_id, site_walk_notes, autopilot }),
     }),
 
   proposal: (id: string) => request<{ proposal: Proposal }>(`/api/proposal?id=${id}`),

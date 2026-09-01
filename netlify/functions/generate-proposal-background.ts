@@ -73,6 +73,14 @@ const ProposalSchema = z.object({
 interface GenerateBody {
   lead_id?: string
   site_walk_notes?: string
+  /**
+   * Autopilot (OFF by default): if the draft comes back with ZERO flagged
+   * lines — every item matched a real catalog code, every price inside the
+   * catalog band, no low-confidence lines — send it to the client
+   * immediately, skipping the review queue. Any flag at all holds the draft
+   * for human review exactly as before, and garbage notes still refuse.
+   */
+  autopilot?: boolean
 }
 
 interface CatalogItem {
@@ -277,20 +285,54 @@ export default withErrors(async (req: Request): Promise<Response> => {
     .insert(lineItems.map((li) => ({ ...li, proposal_id: proposal.id })))
   if (itemsError) return serverError(itemsError.message)
 
-  await db.from('leads').update({ status: 'site_walk_done' }).eq('id', body.lead_id)
+  const flaggedCount = lineItems.filter((li) => li.needs_review).length
 
   await logEvent('proposal', proposal.id, 'proposal_generated', {
     lead_id: body.lead_id,
     total: subtotal,
     line_items: lineItems.length,
-    flagged: lineItems.filter((li) => li.needs_review).length,
+    flagged: flaggedCount,
     cost_usd: costUsd,
     tokens: { input: inputTokens, output: outputTokens },
+    autopilot_requested: body.autopilot === true,
   })
+
+  // Autopilot (opt-in per generation): auto-send ONLY a fully clean draft.
+  // A single flagged line — off-catalog item, out-of-band price, low
+  // confidence — holds it for human review; the model never gets the last
+  // word on an uncertain number.
+  if (body.autopilot === true && flaggedCount === 0 && lineItems.length > 0 && subtotal > 0) {
+    const now = new Date().toISOString()
+    const { data: sent, error: sendError } = await db
+      .from('proposals')
+      .update({ status: 'sent', sent_at: now, updated_at: now })
+      .eq('id', proposal.id)
+      .select()
+      .single()
+    if (sendError) return serverError(sendError.message)
+
+    await db.from('leads').update({ status: 'proposal_sent' }).eq('id', body.lead_id)
+
+    const clientUrl = `${process.env.PUBLIC_BASE_URL ?? ''}/p/${sent.client_token}`
+    await logEvent('proposal', proposal.id, 'proposal_sent', {
+      total: sent.total,
+      client_url: clientUrl,
+      autopilot: true,
+    })
+    await notifySlack(
+      `🤖 *Autopilot sent proposal (zero flags):* ${lead.name} — ${money(sent.total)}\nEvery line matched the catalog inside its price band, so it skipped review.\nClient link: ${clientUrl}`,
+    )
+    return json({ proposal: sent, line_items: lineItems, autopilot_sent: true }, 201)
+  }
+
+  await db.from('leads').update({ status: 'site_walk_done' }).eq('id', body.lead_id)
+
+  const heldNote =
+    body.autopilot === true
+      ? ` · 🤖 autopilot HELD it — ${flaggedCount} flagged line(s) need a human`
+      : ''
   await notifySlack(
-    `📝 *Draft proposal ready for review:* ${lead.name} — ${money(subtotal)} (${lineItems.length} items, ${
-      lineItems.filter((li) => li.needs_review).length
-    } flagged) · AI cost ${costUsd < 0.01 ? '<$0.01' : '$' + costUsd.toFixed(2)}`,
+    `📝 *Draft proposal ready for review:* ${lead.name} — ${money(subtotal)} (${lineItems.length} items, ${flaggedCount} flagged) · AI cost ${costUsd < 0.01 ? '<$0.01' : '$' + costUsd.toFixed(2)}${heldNote}`,
   )
 
   return json({ proposal, line_items: lineItems }, 201)

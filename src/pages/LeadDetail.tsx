@@ -13,6 +13,7 @@ export default function LeadDetail() {
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [autopilot, setAutopilot] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -37,7 +38,7 @@ export default function LeadDetail() {
     // the lead until a proposal newer than the ones we already know appears.
     const known = new Set((lead?.proposals ?? []).map((p) => p.id))
     try {
-      await api.startProposalGeneration(id, notes)
+      await api.startProposalGeneration(id, notes, autopilot)
       const deadline = Date.now() + 150_000
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000))
@@ -147,13 +148,30 @@ export default function LeadDetail() {
 
         {error && <div className="mt-3"><ErrorNote message={error} /></div>}
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="font-mono text-[11px] text-fog">
             model: claude-sonnet-4-6 · ~$0.03/proposal · flagged items require human sign-off
           </div>
-          <Button onClick={generate} disabled={generating || !notes.trim()}>
-            {generating ? <Spinner label="Claude is pricing the scope… ~30-60s" /> : 'Generate draft proposal'}
-          </Button>
+          <div className="flex items-center gap-4">
+            <label
+              className="flex cursor-pointer items-center gap-2 font-mono text-[11px] text-fog"
+              title="Auto-send only if every line matches the catalog inside its price band. A single flagged line holds the draft for review, and garbage notes still refuse."
+            >
+              <input
+                type="checkbox"
+                checked={autopilot}
+                onChange={(e) => setAutopilot(e.target.checked)}
+                disabled={generating}
+                className="h-3.5 w-3.5 accent-[#e07b4f]"
+              />
+              <span>
+                🤖 Autopilot <span className="text-fog/60">· auto-send if zero flags</span>
+              </span>
+            </label>
+            <Button onClick={generate} disabled={generating || !notes.trim()}>
+              {generating ? <Spinner label="Claude is pricing the scope… ~30-60s" /> : 'Generate draft proposal'}
+            </Button>
+          </div>
         </div>
       </Panel>
     </div>
