@@ -2,7 +2,7 @@
 
 Turns Marcus's raw site-walk notes into a priced, client-ready proposal in ~30 seconds — constrained to the company's real pricing catalog, flagged where the AI is unsure, and **never sent without human approval**. Built as the #1 agent from [STRATEGY.md](./STRATEGY.md).
 
-**Live demo:** _deployed URL in the Netlify section below_
+**Live demo:** https://greenscape-ai-ops.netlify.app
 **Stack:** React + Vite + Tailwind v4 · Netlify Functions (TypeScript) · Supabase Postgres · Claude API (`claude-sonnet-4-6`) · Slack incoming webhook
 
 ---
@@ -14,9 +14,10 @@ Meta form / GHL  ──►  POST /api/ghl-webhook          (simulated intake, Sl
                           │
 Marcus does site walk ──► pastes notes in lead page
                           │
-                 POST /api/generate-proposal
+                 POST /api/generate-proposal-background   (202, runs async)
                           │  Claude maps notes → catalog line items (structured output)
                           │  server re-validates codes + price bands
+                          │  UI polls the lead until the draft lands
                           ▼
                  Proposal: pending_review  ──►  HITL review UI (edit / confirm flags)
                           │  approve & send (blocked while items are flagged)
@@ -36,6 +37,7 @@ Every state change lands in an `events` audit table.
 4. **Garbage-input refusal** — nonsense/insufficient notes produce a `needs_clarification` proposal stating what's missing, not a fabricated quote. (Try the "Garbage input" preset on any lead.)
 5. **Human-in-the-loop, enforced twice** — the UI blocks Approve & Send while any line is flagged, and the API independently rejects sends with unresolved flags. Nothing reaches a client unapproved.
 6. **Public page isolation** — the client page is keyed by an unguessable UUID token and exposes only client-safe fields (no AI metadata, internal notes, or costs). All DB access goes through serverless functions with the service-role key; RLS is enabled with zero anon policies.
+7. **Async generation** — a 30–50s LLM call can't live inside a synchronous serverless function (the platform kills it mid-generation), so generation runs as a Netlify *background* function: the API answers 202 instantly, Claude works server-side, and the UI polls until the draft lands. Failures log a `generation_failed` event instead of vanishing.
 
 ## Cost
 
@@ -47,13 +49,15 @@ Every state change lands in an `events` audit table.
 STRATEGY.md              ← deliverable 1: the 5-agent ranking
 netlify/functions/
   ghl-webhook.ts         ← simulated GHL/Zapier lead intake
-  generate-proposal.ts   ← the AI core: Claude + guardrails + cost logging
+  generate-proposal-background.ts   ← the AI core: Claude + guardrails + cost logging
   proposal.ts            ← HITL: detail / edit / approve-send
   client-proposal.ts     ← public token-scoped view + accept
+  reactivation.ts        ← closed-lost queue + approve/reject/send drafts
+  reactivation-generate-background.ts  ← Claude drafts Marcus-voiced SMS batch
   leads.ts, catalog.ts   ← reads for the dashboard
   _lib/                  ← supabase client, event logger, slack, http helpers
 supabase/migrations/     ← schema + seed (63-item Phoenix pricing catalog, demo leads)
-src/pages/               ← Dashboard, LeadDetail, ProposalReview (admin, dark)
+src/pages/               ← Dashboard, LeadDetail, ProposalReview, Reactivation (admin, dark)
                            ClientProposal (public, print-style paper)
 ```
 
@@ -65,7 +69,7 @@ cp .env.example .env        # fill in values (see .env.example for docs)
 npx netlify dev             # serves the app + functions on :8888
 ```
 
-Supabase: create a project, run the two files in `supabase/migrations/` in order (SQL editor or `supabase db push`).
+Supabase: create a project, run the files in `supabase/migrations/` in order (SQL editor or `supabase db push`).
 
 Environment variables (documented in [.env.example](./.env.example)): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL` (optional — notifications degrade gracefully), `PUBLIC_BASE_URL`.
 
@@ -77,8 +81,12 @@ Environment variables (documented in [.env.example](./.env.example)): `SUPABASE_
 - The pricing catalog is a realistic 63-item Phoenix hardscape set distilled from the 200+ line-item spreadsheet described in discovery.
 - Admin auth is omitted for demo access; production gets Supabase Auth on the admin routes (the public client page already has token-scoped isolation).
 
+## Stretch module: Closed-Lost Reactivation (strategy #3)
+
+Built as a second tab (`/reactivation`): the seeded closed-lost pile (sorted by quoted amount), a "draft next batch" button that has Claude write a personal SMS in Marcus's voice per lead (no emojis, no exclamation marks, discounts only if they were lost on price), and a human approval queue — approve-and-send (Slack simulates the GHL SMS send) or reject. Same background-function + polling pattern, same HITL guarantee: the model drafts, a human sends.
+
 ## What I'd build next
 
-1. **Reactivation module** (strategy #3) — batch Marcus-voiced outreach over the 1,400 closed-lost leads, same HITL approval pattern.
-2. GHL two-way sync (real webhook + write-backs) and proposal PDF export.
-3. Quote-cycle analytics: time-from-lead-to-sent, view-to-accept conversion — proving the 6–9 day → 48h claim with data.
+1. GHL two-way sync (real webhook + write-backs) and proposal PDF export.
+2. Quote-cycle analytics: time-from-lead-to-sent, view-to-accept conversion — proving the 6–9 day → 48h claim with data.
+3. Reply-detection on reactivation outreach (GHL inbound webhook → `responded` status → Marcus notified in Slack).
