@@ -1,5 +1,5 @@
 import { getSupabase, logEvent } from './_lib/supabase'
-import { json, badRequest, methodNotAllowed, notFound, parseBody, serverError } from './_lib/http'
+import { json, badRequest, methodNotAllowed, notFound, parseBody, serverError, withErrors } from './_lib/http'
 import { notifySlack, money } from './_lib/slack'
 
 /**
@@ -29,7 +29,7 @@ interface PatchBody {
   line_items?: LineItemInput[]
 }
 
-export default async (req: Request): Promise<Response> => {
+export default withErrors(async (req: Request): Promise<Response> => {
   const url = new URL(req.url)
   const id = url.searchParams.get('id')
   if (!id) return badRequest('id is required')
@@ -148,7 +148,7 @@ export default async (req: Request): Promise<Response> => {
     const now = new Date().toISOString()
     const { data: sent, error: updError } = await db
       .from('proposals')
-      .update({ status: 'sent', approved_at: now, sent_at: now })
+      .update({ status: 'sent', sent_at: now, updated_at: now })
       .eq('id', id)
       .select()
       .single()
@@ -168,4 +168,4 @@ export default async (req: Request): Promise<Response> => {
   }
 
   return methodNotAllowed()
-}
+})

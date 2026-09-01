@@ -1,5 +1,5 @@
 import { getSupabase, logEvent } from './_lib/supabase'
-import { json, badRequest, methodNotAllowed, notFound, serverError } from './_lib/http'
+import { json, badRequest, methodNotAllowed, notFound, serverError, withErrors } from './_lib/http'
 import { notifySlack, money } from './_lib/slack'
 
 /**
@@ -9,7 +9,7 @@ import { notifySlack, money } from './_lib/slack'
  * GET  /api/client-proposal?token=<uuid>                 -> view (marks `viewed` once)
  * POST /api/client-proposal?token=<uuid>&action=accept   -> accept the proposal
  */
-export default async (req: Request): Promise<Response> => {
+export default withErrors(async (req: Request): Promise<Response> => {
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
   if (!token) return badRequest('token is required')
@@ -38,7 +38,10 @@ export default async (req: Request): Promise<Response> => {
 
   if (req.method === 'GET') {
     if (proposal.status === 'sent') {
-      await db.from('proposals').update({ status: 'viewed' }).eq('id', proposal.id)
+      await db
+        .from('proposals')
+        .update({ status: 'viewed', viewed_at: new Date().toISOString() })
+        .eq('id', proposal.id)
       proposal.status = 'viewed'
       await logEvent('proposal', proposal.id, 'proposal_viewed', {})
       await notifySlack(`👀 *Proposal viewed:* ${leadInfo?.name} — ${money(proposal.total)}`)
@@ -80,4 +83,4 @@ export default async (req: Request): Promise<Response> => {
   }
 
   return methodNotAllowed()
-}
+})

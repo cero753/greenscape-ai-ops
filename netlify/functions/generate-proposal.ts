@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { getSupabase, logEvent } from './_lib/supabase'
-import { json, badRequest, methodNotAllowed, parseBody, notFound, serverError } from './_lib/http'
+import { json, badRequest, methodNotAllowed, parseBody, notFound, serverError, withErrors } from './_lib/http'
 import { notifySlack, money } from './_lib/slack'
 
 /**
@@ -112,7 +112,7 @@ SITE-WALK NOTES:
 ${notes}`
 }
 
-export default async (req: Request): Promise<Response> => {
+export default withErrors(async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return methodNotAllowed()
 
   const body = await parseBody<GenerateBody>(req)
@@ -288,4 +288,4 @@ export default async (req: Request): Promise<Response> => {
   )
 
   return json({ proposal, line_items: lineItems }, 201)
-}
+})

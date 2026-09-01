@@ -1,11 +1,11 @@
 import { getSupabase } from './_lib/supabase'
-import { json, methodNotAllowed, serverError, notFound } from './_lib/http'
+import { json, methodNotAllowed, serverError, notFound, withErrors } from './_lib/http'
 
 /**
  * GET /api/leads          -> all leads with their proposals (newest first)
  * GET /api/leads?id=<id>  -> single lead with proposals
  */
-export default async (req: Request): Promise<Response> => {
+export default withErrors(async (req: Request): Promise<Response> => {
   if (req.method !== 'GET') return methodNotAllowed()
 
   const id = new URL(req.url).searchParams.get('id')
@@ -27,4 +27,4 @@ export default async (req: Request): Promise<Response> => {
     .order('created_at', { ascending: false })
   if (error) return serverError(error.message)
   return json({ leads: data })
-}
+})

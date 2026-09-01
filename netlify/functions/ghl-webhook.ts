@@ -1,5 +1,5 @@
 import { getSupabase, logEvent } from './_lib/supabase'
-import { json, badRequest, methodNotAllowed, parseBody, serverError } from './_lib/http'
+import { json, badRequest, methodNotAllowed, parseBody, serverError, withErrors } from './_lib/http'
 import { notifySlack } from './_lib/slack'
 
 /**
@@ -18,7 +18,7 @@ interface GhlPayload {
   budget_range?: string
 }
 
-export default async (req: Request): Promise<Response> => {
+export default withErrors(async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return methodNotAllowed()
 
   const body = await parseBody<GhlPayload>(req)
@@ -53,4 +53,4 @@ export default async (req: Request): Promise<Response> => {
   )
 
   return json({ lead }, 201)
-}
+})
