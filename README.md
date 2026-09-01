@@ -4,6 +4,7 @@ Turns Marcus's raw site-walk notes into a priced, client-ready proposal in ~30 s
 
 **Live demo:** https://greenscape-ai-ops.netlify.app
 **Stack:** React + Vite + Tailwind v4 · Netlify Functions (TypeScript) · Supabase Postgres · Claude API (`claude-sonnet-4-6`) · Slack incoming webhook
+**Verification:** [docs/VERIFICATION.md](./docs/VERIFICATION.md) — an 8-area test round run against the deployed site (guardrails, prompt injection, 21 error paths), plus the requirement audit and measured costs.
 
 ---
 
@@ -59,6 +60,7 @@ netlify/functions/
   leads.ts, catalog.ts   ← reads for the dashboard
   _lib/                  ← supabase client, event logger, slack, http helpers
 supabase/migrations/     ← schema + seed (63-item Phoenix pricing catalog, demo leads)
+docs/VERIFICATION.md     ← live test round, requirement audit, measured cost
 src/pages/               ← Dashboard, LeadDetail, ProposalReview, Reactivation (admin, dark)
                            ClientProposal (public, print-style paper)
 ```
