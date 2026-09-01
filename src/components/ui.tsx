@@ -94,6 +94,14 @@ export function Shell({ children }: { children: ReactNode }) {
             >
               Pipeline
             </Link>
+            <Link
+              to="/reactivation"
+              className={`rounded-md px-3 py-1.5 transition-colors ${
+                pathname === '/reactivation' ? 'bg-panel2 text-bone' : 'text-fog hover:text-bone'
+              }`}
+            >
+              Reactivation
+            </Link>
             <a
               href="https://github.com/cero753/greenscape-ai-ops"
               target="_blank"

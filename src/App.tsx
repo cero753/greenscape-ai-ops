@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import LeadDetail from './pages/LeadDetail'
 import ProposalReview from './pages/ProposalReview'
 import ClientProposalPage from './pages/ClientProposal'
+import Reactivation from './pages/Reactivation'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/leads/:id" element={<LeadDetail />} />
                 <Route path="/proposals/:id" element={<ProposalReview />} />
+                <Route path="/reactivation" element={<Reactivation />} />
               </Routes>
             </Shell>
           }

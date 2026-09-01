@@ -1,4 +1,4 @@
-import type { LeadStatus, ProposalStatus } from './types'
+import type { ClosedLostStatus, LeadStatus, ProposalStatus } from './types'
 
 export function money(n: number | null | undefined, cents = false): string {
   if (n == null) return '$0'
@@ -43,6 +43,17 @@ export const PROPOSAL_STATUS: Record<ProposalStatus, { label: string; cls: strin
   viewed: { label: 'Viewed by client', cls: 'text-terra border-terra/60 bg-terra/15' },
   accepted: { label: 'Accepted 🎉', cls: 'text-cactus border-cactus/60 bg-cactus/20' },
   declined: { label: 'Declined', cls: 'text-fog border-edge bg-panel' },
+}
+
+export const CLOSED_LOST_STATUS: Record<ClosedLostStatus, { label: string; cls: string }> = {
+  untouched: { label: 'Untouched', cls: 'text-fog border-edge bg-panel' },
+  drafting: { label: 'Drafting…', cls: 'text-sun border-sun/40 bg-sun/10' },
+  draft_ready: { label: 'Draft ready', cls: 'text-terra border-terra/40 bg-terra/10' },
+  approved: { label: 'Approved', cls: 'text-cactus border-cactus/40 bg-cactus/10' },
+  sent: { label: 'Outreach sent', cls: 'text-cactus border-cactus/40 bg-cactus/10' },
+  responded: { label: 'Responded', cls: 'text-cactus border-cactus/60 bg-cactus/20' },
+  reactivated: { label: 'Reactivated 🎉', cls: 'text-cactus border-cactus/60 bg-cactus/20' },
+  opted_out: { label: 'Opted out', cls: 'text-fog border-edge bg-panel' },
 }
 
 export const SOURCE_LABEL: Record<string, string> = {

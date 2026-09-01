@@ -1,4 +1,4 @@
-import type { CatalogItem, ClientProposal, Lead, LineItem, Proposal } from './types'
+import type { CatalogItem, ClientProposal, ClosedLostLead, Lead, LineItem, OutreachDraft, Proposal } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -20,8 +20,10 @@ export const api = {
   simulateLead: (payload: Record<string, string>) =>
     request<{ lead: Lead }>('/api/ghl-webhook', { method: 'POST', body: JSON.stringify(payload) }),
 
-  generateProposal: (lead_id: string, site_walk_notes: string) =>
-    request<{ proposal: Proposal; line_items: LineItem[] }>('/api/generate-proposal', {
+  // Netlify background function: answers 202 immediately, Claude keeps
+  // working server-side. The caller polls `lead()` until the draft appears.
+  startProposalGeneration: (lead_id: string, site_walk_notes: string) =>
+    request<null>('/api/generate-proposal-background', {
       method: 'POST',
       body: JSON.stringify({ lead_id, site_walk_notes }),
     }),
@@ -51,4 +53,25 @@ export const api = {
       `/api/client-proposal?token=${token}&action=accept`,
       { method: 'POST' },
     ),
+
+  reactivation: () => request<{ leads: ClosedLostLead[] }>('/api/reactivation'),
+
+  // Background function (202): poll `reactivation()` for `drafting` -> `draft_ready`.
+  startReactivationDrafts: (lead_ids?: string[]) =>
+    request<null>('/api/reactivation-generate-background', {
+      method: 'POST',
+      body: JSON.stringify({ lead_ids }),
+    }),
+
+  sendReactivationDraft: (draft_id: string) =>
+    request<{ draft: OutreachDraft }>('/api/reactivation', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'send', draft_id }),
+    }),
+
+  rejectReactivationDraft: (draft_id: string) =>
+    request<{ ok: boolean }>('/api/reactivation', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'reject', draft_id }),
+    }),
 }

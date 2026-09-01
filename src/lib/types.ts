@@ -84,6 +84,43 @@ export interface CatalogItem {
   notes: string | null
 }
 
+export type ClosedLostStatus =
+  | 'untouched'
+  | 'drafting'
+  | 'draft_ready'
+  | 'approved'
+  | 'sent'
+  | 'responded'
+  | 'reactivated'
+  | 'opted_out'
+
+export interface OutreachDraft {
+  id: string
+  closed_lost_lead_id: string
+  channel: 'sms' | 'email'
+  message: string
+  status: 'pending_review' | 'approved' | 'sent' | 'rejected'
+  ai_model: string | null
+  generation_cost_usd: number | null
+  sent_at: string | null
+  created_at: string
+}
+
+export interface ClosedLostLead {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  project_type: string | null
+  quoted_amount: number | null
+  lost_reason: string | null
+  last_contact_date: string | null
+  ghl_notes: string | null
+  status: ClosedLostStatus
+  created_at: string
+  outreach_drafts: OutreachDraft[]
+}
+
 export interface ClientProposal {
   id: string
   status: ProposalStatus

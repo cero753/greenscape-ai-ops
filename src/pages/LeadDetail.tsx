@@ -32,13 +32,29 @@ export default function LeadDetail() {
     if (!id || !notes.trim()) return
     setGenerating(true)
     setError('')
+    // Generation runs as a Netlify background function (the LLM call takes
+    // 30-50s, longer than a synchronous function allows). Fire it, then poll
+    // the lead until a proposal newer than the ones we already know appears.
+    const known = new Set((lead?.proposals ?? []).map((p) => p.id))
     try {
-      const { proposal } = await api.generateProposal(id, notes)
-      navigate(`/proposals/${proposal.id}`)
+      await api.startProposalGeneration(id, notes)
+      const deadline = Date.now() + 150_000
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000))
+        const { lead: fresh } = await api.lead(id)
+        const arrived = (fresh.proposals ?? []).find((p) => !known.has(p.id))
+        if (arrived) {
+          navigate(`/proposals/${arrived.id}`)
+          return
+        }
+      }
+      setError(
+        'Generation is taking longer than expected. Give it a moment and refresh — the draft will appear under proposals for this lead.',
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Generation failed')
-      setGenerating(false)
     }
+    setGenerating(false)
   }
 
   if (!lead && !error) return <Spinner label="loading lead…" />
@@ -136,7 +152,7 @@ export default function LeadDetail() {
             model: claude-sonnet-4-6 · ~$0.03/proposal · flagged items require human sign-off
           </div>
           <Button onClick={generate} disabled={generating || !notes.trim()}>
-            {generating ? <Spinner label="Claude is pricing the scope…" /> : 'Generate draft proposal'}
+            {generating ? <Spinner label="Claude is pricing the scope… ~30-60s" /> : 'Generate draft proposal'}
           </Button>
         </div>
       </Panel>

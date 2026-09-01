@@ -6,10 +6,16 @@ import { json, badRequest, methodNotAllowed, parseBody, notFound, serverError, w
 import { notifySlack, money } from './_lib/slack'
 
 /**
- * POST /api/generate-proposal  { lead_id, site_walk_notes }
+ * POST /api/generate-proposal-background  { lead_id, site_walk_notes }
  *
  * The core AI step: turns Marcus's raw site-walk notes into a priced draft
  * proposal, constrained to the company pricing catalog.
+ *
+ * This is a Netlify BACKGROUND function (the `-background` suffix): the
+ * platform replies 202 immediately and lets the function run up to 15 min,
+ * because a 30-50s Claude generation cannot live inside a synchronous
+ * function's ~10s limit. The admin UI polls the lead's proposals until the
+ * draft lands (or a `generation_failed` event is logged).
  *
  * Guardrails (in order):
  *  1. Model may ONLY price against catalog codes it is given. Free-form items
