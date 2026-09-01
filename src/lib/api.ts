@@ -56,6 +56,23 @@ export const api = {
 
   reactivation: () => request<{ leads: ClosedLostLead[] }>('/api/reactivation'),
 
+  // Pipeline Q&A agent: POST records the question and kicks a background
+  // Claude tool-use loop (202 + query_id); poll askStatus until answered.
+  askPipeline: (question: string) =>
+    request<{ query_id: string }>('/api/slack-ask', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    }),
+
+  askStatus: (id: string) =>
+    request<{
+      id: string
+      question: string
+      answer: string | null
+      status: 'running' | 'answered' | 'failed'
+      generation_cost_usd: number | null
+    }>(`/api/slack-ask?id=${id}`),
+
   // Background function (202): poll `reactivation()` for `drafting` -> `draft_ready`.
   startReactivationDrafts: (lead_ids?: string[]) =>
     request<null>('/api/reactivation-generate-background', {

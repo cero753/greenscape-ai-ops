@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Greenscape AI Ops — Build Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0c0e0c; --panel:#141714; --panel2:#1b1f1b; --edge:#272c27; --edge2:#343b34;
+    --fog:#8a9187; --bone:#e8e6df; --terra:#e07b4f; --terra-deep:#b85c36;
+    --cactus:#8fb573; --sun:#d9a441; --alert:#d96459;
+    --display:'Bricolage Grotesque',system-ui,sans-serif;
+    --serif:'Fraunces',Georgia,serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--ink); color:var(--bone); font-family:var(--display);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  /* grain */
+  body::after{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:60; opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  }
+  .deck{position:relative;height:100vh;width:100vw}
+  section{
+    position:absolute; inset:0; display:none;
+    padding:clamp(32px,5vh,72px) clamp(32px,6vw,110px);
+    flex-direction:column; justify-content:center; gap:clamp(14px,2.2vh,26px);
+    overflow:hidden;
+  }
+  section.on{display:flex}
+  section.on > *{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+  section.on > *:nth-child(2){animation-delay:.06s}
+  section.on > *:nth-child(3){animation-delay:.12s}
+  section.on > *:nth-child(4){animation-delay:.18s}
+  section.on > *:nth-child(5){animation-delay:.24s}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+  .kicker{font-family:var(--mono);font-size:clamp(10px,1.05vw,12px);letter-spacing:.22em;text-transform:uppercase;color:var(--terra)}
+  h1{font-size:clamp(34px,5.4vw,74px);line-height:1.02;letter-spacing:-.025em;font-weight:800}
+  h2{font-size:clamp(26px,3.5vw,46px);line-height:1.08;letter-spacing:-.02em;font-weight:700}
+  h3{font-size:clamp(15px,1.5vw,20px);font-weight:700}
+  p,li{font-size:clamp(14px,1.35vw,19px);line-height:1.55;color:var(--bone)}
+  .dim{color:var(--fog)}
+  .terra{color:var(--terra)} .cactus{color:var(--cactus)} .sun{color:var(--sun)} .alert{color:var(--alert)}
+  .mono{font-family:var(--mono)}
+  .lede{max-width:60ch;color:var(--fog);font-size:clamp(15px,1.55vw,22px);line-height:1.5}
+
+  .grid{display:grid;gap:clamp(10px,1.4vw,18px)}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .card{
+    border:1px solid var(--edge); background:var(--panel); border-radius:14px;
+    padding:clamp(14px,1.6vw,22px); min-width:0;
+  }
+  .card.hi{border-color:rgba(224,123,79,.45);background:rgba(224,123,79,.07)}
+  .card.win{border-color:rgba(143,181,115,.4);background:rgba(143,181,115,.07)}
+  .card.bad{border-color:rgba(217,100,89,.4);background:rgba(217,100,89,.07)}
+  .stat{font-size:clamp(24px,3.4vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1}
+  .lbl{font-family:var(--mono);font-size:clamp(9px,.85vw,11px);letter-spacing:.18em;text-transform:uppercase;color:var(--fog);margin-bottom:8px}
+  .note{font-size:clamp(12px,1.1vw,15px);color:var(--fog);line-height:1.45;margin-top:8px}
+
+  ol.rank{list-style:none;display:grid;gap:clamp(7px,1vw,12px)}
+  ol.rank li{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--edge);background:var(--panel);border-radius:12px;padding:clamp(10px,1.2vw,16px)}
+  ol.rank li.first{border-color:rgba(224,123,79,.5);background:rgba(224,123,79,.08)}
+  .num{font-family:var(--mono);font-size:clamp(15px,1.6vw,21px);color:var(--terra);font-weight:600;min-width:1.4em}
+  .money{margin-left:auto;font-family:var(--mono);font-size:clamp(12px,1.25vw,17px);color:var(--cactus);white-space:nowrap;padding-left:12px}
+
+  pre{
+    font-family:var(--mono);font-size:clamp(9.5px,1.02vw,14px);line-height:1.5;color:var(--bone);
+    border:1px solid var(--edge);background:var(--panel);border-radius:14px;
+    padding:clamp(14px,1.7vw,24px);overflow:auto;white-space:pre;
+  }
+  pre .c{color:var(--terra)} pre .g{color:var(--cactus)} pre .d{color:var(--fog)}
+
+  table{border-collapse:collapse;width:100%;font-size:clamp(11px,1.15vw,16px)}
+  th,td{text-align:left;padding:clamp(6px,.85vw,11px) clamp(8px,1vw,14px);border-bottom:1px solid var(--edge)}
+  th{font-family:var(--mono);font-size:clamp(9px,.85vw,11px);letter-spacing:.16em;text-transform:uppercase;color:var(--fog);font-weight:500}
+  td.ok{color:var(--cactus);font-family:var(--mono)}
+  tbody tr:last-child td{border-bottom:none}
+
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--edge2);background:var(--panel2);border-radius:999px;padding:6px 14px;font-family:var(--mono);font-size:clamp(10px,1vw,13px);color:var(--fog)}
+  .row{display:flex;flex-wrap:wrap;gap:10px}
+
+  /* chrome */
+  .bar{position:fixed;left:0;top:0;height:2px;background:var(--terra);z-index:70;transition:width .3s cubic-bezier(.2,.7,.2,1)}
+  .count{position:fixed;right:clamp(18px,2.5vw,34px);bottom:clamp(14px,2vh,24px);font-family:var(--mono);font-size:11px;color:var(--fog);z-index:70;letter-spacing:.1em}
+  .brand{position:fixed;left:clamp(18px,2.5vw,34px);bottom:clamp(14px,2vh,24px);font-family:var(--mono);font-size:11px;color:rgba(138,145,135,.55);z-index:70;letter-spacing:.1em}
+  .hint{position:fixed;left:50%;transform:translateX(-50%);bottom:clamp(14px,2vh,24px);font-family:var(--mono);font-size:11px;color:rgba(138,145,135,.4);z-index:70}
+  @media print{body{overflow:visible}section{display:flex!important;position:relative;height:100vh;page-break-after:always}}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section>
+  <div class="kicker">isthispossible.ai · AI Developer take-home</div>
+  <h1>Greenscape Pro<br/><span class="terra">AI Proposal Engine</span></h1>
+  <p class="lede">Turning a founder's 6–9 day quote cycle into a same-day, human-approved proposal — built, deployed, and guarded against its own model.</p>
+  <div class="row">
+    <span class="pill">Kartik Bhardwaj</span>
+    <span class="pill">greenscape-ai-ops.netlify.app</span>
+    <span class="pill">Claude · Supabase · Netlify · Slack</span>
+  </div>
+</section>
+
+<!-- 2 -->
+<section>
+  <div class="kicker">The diagnosis</div>
+  <h2>Greenscape isn't lead-constrained.<br/>It's <span class="terra">Marcus-constrained</span>.</h2>
+  <div class="grid g3">
+    <div class="card"><div class="lbl">Marketing</div><div class="stat cactus">4.5x</div><p class="note">ROAS. The funnel works. More leads is not the problem.</p></div>
+    <div class="card hi"><div class="lbl">Quote cycle</div><div class="stat terra">6–9 days</div><p class="note">Only Marcus can turn site-walk notes into priced scope. He does it at night.</p></div>
+    <div class="card bad"><div class="lbl">Consequence</div><div class="stat alert">35–40%</div><p class="note">of <em>qualified</em> leads walk to whoever answered first.</p></div>
+  </div>
+  <p class="lede">Every dollar of AI spend should buy back the hours where Marcus is the single point of failure — starting where his bottleneck directly torches revenue.</p>
+</section>
+
+<!-- 3 -->
+<section>
+  <div class="kicker">The math that set the ranking</div>
+  <h2>~$500–700K/yr sitting in the gap</h2>
+  <div class="grid g4">
+    <div class="card"><div class="lbl">Qualified projects/yr</div><div class="stat">~150</div></div>
+    <div class="card"><div class="lbl">Average ticket</div><div class="stat">$28K</div></div>
+    <div class="card"><div class="lbl">Lost to slow quotes</div><div class="stat alert">90–100</div><p class="note">people he already walked the property with</p></div>
+    <div class="card win"><div class="lbl">Recover just ⅓</div><div class="stat cactus">$500–700K</div></div>
+  </div>
+  <p class="lede">Nothing else on the list is within an order of magnitude. That's why the Proposal Engine is #1 — <span class="terra">from the math, not from deference to the founder</span>.</p>
+</section>
+
+<!-- 4 -->
+<section>
+  <div class="kicker">Deliverable 1 · STRATEGY.md</div>
+  <h2>Five agents, ranked by recoverable dollars</h2>
+  <ol class="rank">
+    <li class="first"><span class="num">1</span><div><h3>AI Proposal Engine <span class="terra mono">— built</span></h3><p class="note">Site-walk notes → priced, reviewable proposal in minutes. Kills the 6–9 day cycle.</p></div><span class="money">$500–700K/yr</span></li>
+    <li><span class="num">2</span><div><h3>Post-Sign Pipeline Chaser</h3><p class="note">8–12 signed projects stuck in permit/HOA/deposit limbo at any time.</p></div><span class="money">$224–336K delayed</span></li>
+    <li><span class="num">3</span><div><h3>Closed-Lost Reactivation <span class="terra mono">— built</span></h3><p class="note">1,400 dormant leads × ~2% re-close × $28K.</p></div><span class="money">$784K latent</span></li>
+    <li><span class="num">4</span><div><h3>Build-Update Agent</h3><p class="note">70% of clients call for updates. Referral engine in disguise.</p></div><span class="money">sentiment</span></li>
+    <li><span class="num">5</span><div><h3>Lead Pre-Qualification</h3><p class="note">4–6 unqualified calls/wk off Marcus's calendar.</p></div><span class="money">1–2 hrs/wk</span></li>
+  </ol>
+</section>
+
+<!-- 5 -->
+<section>
+  <div class="kicker">Judgment, not order-taking</div>
+  <h2>What I'd talk Marcus <span class="alert">out of</span></h2>
+  <div class="grid g2">
+    <div class="card bad">
+      <h3>Crew coaching agent</h3>
+      <p class="note"><strong>Fails 3 tests.</strong> Size: ~$2K/wk of rework vs $16K+/wk at risk in quoting. Mechanism: rework is a supervision problem — an LLM mailing training content has the weakest causal path on the list. Opportunity cost: eats the same build budget as #1 while touching none of the revenue engine.</p>
+    </div>
+    <div class="card bad">
+      <h3>Marketing / content agent</h3>
+      <p class="note"><strong>Solves the wrong constraint.</strong> At 4.5x ROAS the funnel isn't broken. More leads into a 9-day quote cycle is buying water for a bucket with a hole in it — you re-lose them at the same 35–40% rate.</p>
+    </div>
+  </div>
+  <p class="lede">An AI partner who just re-orders the founder's wishlist is a vendor, not an advisor.</p>
+</section>
+
+<!-- 6 -->
+<section>
+  <div class="kicker">Deliverable 2 · the build</div>
+  <h2>End-to-end flow</h2>
+<pre><span class="d">Meta form / GHL</span>  ──►  <span class="c">POST /api/ghl-webhook</span>        <span class="d">simulated intake · Slack ping</span>
+                          │
+<span class="d">Marcus does site walk</span> ──► <span class="d">pastes raw notes in the lead page</span>
+                          │
+                 <span class="c">POST /api/generate-proposal-background</span>   <span class="d">(202, runs async)</span>
+                          │  <span class="d">Claude maps notes → catalog line items (structured output)</span>
+                          │  <span class="d">server re-validates codes + price bands</span>
+                          │  <span class="d">UI polls until the draft lands</span>
+                          ▼
+                 <span class="g">Proposal: pending_review</span>  ──►  <span class="d">HITL review · edit · resolve flags</span>
+                          │  <span class="d">approve &amp; send — BLOCKED while any line is flagged</span>
+                          ▼
+                 <span class="c">Client page /p/&lt;token&gt;</span>   ──►  <span class="d">viewed → accepted</span>
+                          │                          │
+                       <span class="d">Slack 👀</span>                  <span class="d">Slack 🎉 + 50% deposit stub</span>
+</pre>
+  <p class="lede">Every state change lands in an <span class="mono terra">events</span> audit table.</p>
+</section>
+
+<!-- 7 -->
+<section>
+  <div class="kicker">Architecture</div>
+  <h2>Boring stack, deliberate choices</h2>
+  <div class="grid g4">
+    <div class="card"><div class="lbl">Frontend</div><h3>React + Vite</h3><p class="note">Tailwind v4. Admin cockpit (dark) + client proposal page (paper).</p></div>
+    <div class="card"><div class="lbl">API</div><h3>Netlify Functions</h3><p class="note">TypeScript. Two are <em>background</em> functions — see the async guardrail.</p></div>
+    <div class="card"><div class="lbl">Data</div><h3>Supabase Postgres</h3><p class="note">RLS on, zero anon policies. Service-role key never leaves the server.</p></div>
+    <div class="card"><div class="lbl">AI</div><h3>claude-sonnet-4-6</h3><p class="note">Structured output via zod. Real calls, cost logged per generation.</p></div>
+  </div>
+  <p class="lede">External integration: <span class="terra">Slack incoming webhook</span> — the system's mouth (every state change pings Marcus) and now its ears (<span class="mono">/ask</span> questions come back answered).</p>
+</section>
+
+<!-- 8 -->
+<section>
+  <div class="kicker">The AI core</div>
+  <h2>The model gets a <span class="terra">narrow job</span></h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>What Claude is allowed to do</h3>
+      <p class="note">Read messy site-walk notes → map scope onto the company's real 63-item Phoenix pricing catalog → emit line items with quantities, a confidence score, and an explicit assumption per line. That's retrieval + mapping.</p>
+    </div>
+    <div class="card">
+      <h3>What Claude is <em>not</em> allowed to do</h3>
+      <p class="note">Invent prices. Invent catalog codes. Return prose. Decide anything reaches a client. Judgment stays with Marcus — he stops being the pricing typist, he stays the pricing authority.</p>
+    </div>
+  </div>
+  <p class="lede">That framing is the whole design: <span class="terra">the model drafts, the human ships</span>.</p>
+</section>
+
+<!-- 9 -->
+<section>
+  <div class="kicker">"What happens when the model returns garbage?"</div>
+  <h2>Seven layers, all demoable</h2>
+  <div class="grid g2">
+    <div class="card"><h3><span class="terra mono">1</span> Catalog-constrained pricing</h3><p class="note">Off-catalog items come back at <span class="mono">$0</span> and flagged for manual pricing — never guessed.</p></div>
+    <div class="card"><h3><span class="terra mono">2</span> Structured output</h3><p class="note">zod-validated via <span class="mono">messages.parse()</span>. The model <em>cannot</em> return prose. One retry, then clean failure.</p></div>
+    <div class="card"><h3><span class="terra mono">3</span> Server-side re-validation</h3><p class="note">Unknown codes zeroed; prices outside the catalog's min/max band flagged. The model's numbers are never trusted blind.</p></div>
+    <div class="card"><h3><span class="terra mono">4</span> Garbage-input refusal</h3><p class="note">Nonsense notes produce <span class="mono">needs_clarification</span> — a checklist of what to go ask — not a fabricated quote.</p></div>
+    <div class="card"><h3><span class="terra mono">5</span> HITL enforced twice</h3><p class="note">UI blocks Approve &amp; Send while flagged; the API independently rejects it. Belt and suspenders.</p></div>
+    <div class="card"><h3><span class="terra mono">6</span> Public page isolation</h3><p class="note">Unguessable UUID token, client-safe fields only — no AI metadata, internal notes, or costs.</p></div>
+    <div class="card" style="grid-column:1/-1"><h3><span class="terra mono">7</span> Async generation</h3><p class="note">A 30–50s LLM call can't live in a synchronous serverless function — the platform kills it mid-generation. <em>Found this in live testing.</em> Generation runs as a Netlify background function: 202 instantly, UI polls, failures log a <span class="mono">generation_failed</span> event instead of vanishing.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section>
+  <div class="kicker">Architecture judgment</div>
+  <h2>Where I used an <span class="terra">agent</span> — and where I refused to</h2>
+  <div class="grid g2">
+    <div class="card win">
+      <h3>Workflow · money moves</h3>
+      <p class="note">Proposal generation and reactivation drafting are <strong>code-owned control flow</strong>. The model does exactly one constrained step; my code decides what happens before and after, validates the output, and gates the send behind a human. Predictable, auditable, cheap.</p>
+    </div>
+    <div class="card hi">
+      <h3>Agent · open-ended reads</h3>
+      <p class="note">"Ask your pipeline" is a real tool-use loop: Claude gets four <strong>read-only</strong> DB tools and picks which to call, up to 6 turns, before answering. Same endpoint backs a Slack <span class="mono">/ask</span> slash command.</p>
+    </div>
+  </div>
+  <p class="lede">The line: <span class="terra">let the model own control flow only where the blast radius is zero</span>. Every Q&amp;A tool is a SELECT. Nothing it can do writes, sends, or spends.</p>
+</section>
+
+<!-- 11 -->
+<section>
+  <div class="kicker">Unit economics</div>
+  <h2>~$0.03 a proposal</h2>
+  <div class="grid g3">
+    <div class="card"><div class="lbl">Per generation</div><div class="stat terra">$0.03</div><p class="note">~4–5K input (catalog + notes) + ~1K output on Sonnet 4.6</p></div>
+    <div class="card"><div class="lbl">At 300 proposals/yr</div><div class="stat">&lt; $10</div><p class="note">total annual inference cost</p></div>
+    <div class="card win"><div class="lbl">Against</div><div class="stat cactus">$500K+</div><p class="note">/yr of recovered revenue</p></div>
+  </div>
+  <p class="lede"><strong>Why Sonnet, not Opus:</strong> constrained extraction + mapping with server-side validation and human review behind it — top-shelf reasoning buys nothing here. <strong>Why not Haiku:</strong> interpreting messy field notes is exactly where the cheap tier starts hallucinating quantities. Tokens and dollars are logged per proposal and shown in the review UI.</p>
+</section>
+
+<!-- 12 · TEST RESULTS — filled after the live test round -->
+<section id="results">
+  <div class="kicker">Verification</div>
+  <h2>Tested live, not locally</h2>
+  <p class="lede">Results from the full test round land here.</p>
+</section>
+
+<!-- 13 -->
+<section>
+  <div class="kicker">Brief compliance</div>
+  <h2>Every requirement, and where to see it</h2>
+  <table>
+    <thead><tr><th>Requirement</th><th>Where it lives</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Rank 5 agents by ROI with reasoning</td><td class="mono dim">STRATEGY.md</td><td class="ok">✓</td></tr>
+      <tr><td>Build the #1 agent end-to-end</td><td class="mono dim">AI Proposal Engine, live</td><td class="ok">✓</td></tr>
+      <tr><td>Deployed, publicly reachable</td><td class="mono dim">greenscape-ai-ops.netlify.app</td><td class="ok">✓</td></tr>
+      <tr><td>Public repo, incremental commits</td><td class="mono dim">github.com/cero753/greenscape-ai-ops</td><td class="ok">✓</td></tr>
+      <tr><td>Real database persistence</td><td class="mono dim">Supabase · 8 tables + migrations</td><td class="ok">✓</td></tr>
+      <tr><td>Real LLM calls</td><td class="mono dim">Claude Sonnet 4.6, cost logged</td><td class="ok">✓</td></tr>
+      <tr><td>Real external integration</td><td class="mono dim">Slack webhook + /ask command</td><td class="ok">✓</td></tr>
+      <tr><td>Human-in-the-loop</td><td class="mono dim">Review queue, enforced twice</td><td class="ok">✓</td></tr>
+      <tr><td>Handles model garbage</td><td class="mono dim">7 guardrail layers</td><td class="ok">✓</td></tr>
+      <tr><td>Documented setup + assumptions</td><td class="mono dim">README.md · .env.example</td><td class="ok">✓</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 14 -->
+<section>
+  <div class="kicker">Honest edges</div>
+  <h2>Assumptions &amp; what I'd build next</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Simplified for the demo</h3>
+      <p class="note">GHL intake is simulated by an endpoint with the same payload shape a Zapier hook delivers. "Send" is Slack + a shareable link rather than GHL email/SMS. Deposit invoice is a stub, not Stripe. Admin auth omitted for demo access — the public client page already has token isolation. Slack signature verification skipped.</p>
+    </div>
+    <div class="card hi">
+      <h3>Next three</h3>
+      <p class="note">1 — GHL two-way sync (real webhook + write-backs) and PDF export.<br/>2 — Quote-cycle analytics: time-from-lead-to-sent and view→accept, proving the 6–9 day → 48h claim with data.<br/>3 — Reply detection on reactivation (inbound webhook → <span class="mono">responded</span> → Marcus pinged).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section>
+  <div class="kicker">In one line</div>
+  <h1>The model drafts.<br/><span class="terra">The human ships.</span></h1>
+  <p class="lede">Same-day proposals against a real catalog, with seven guardrails and an audit trail — built for the constraint the client's own numbers pointed at.</p>
+  <div class="row">
+    <span class="pill">greenscape-ai-ops.netlify.app</span>
+    <span class="pill">github.com/cero753/greenscape-ai-ops</span>
+  </div>
+</section>
+
+</div>
+<div class="brand">Greenscape AI Ops</div>
+<div class="hint">← → to navigate</div>
+<div class="count" id="count"></div>
+<script>
+  const slides=[...document.querySelectorAll('section')];
+  let i=0;
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+    document.getElementById('count').textContent=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
+    location.hash=i+1;
+  }
+  addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();show(i+1)}
+    if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();show(i-1)}
+    if(e.key==='Home')show(0);
+    if(e.key==='End')show(slides.length-1);
+  });
+  addEventListener('click',e=>{ if(!e.target.closest('a')) show(i + (e.clientX < innerWidth*0.25 ? -1 : 1)); });
+  show(parseInt(location.hash.slice(1))-1||0);
+</script>
+</body>
+</html>

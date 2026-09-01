@@ -1,0 +1,8 @@
+Add pipeline Q&A agent: Claude tool-use loop over read-only DB tools
+
+/api/slack-ask accepts a Slack slash command or dashboard JSON, records
+the question, and kicks a background worker where Claude decides which
+of four read-only tools (pipeline_stats, list_leads, find_lead,
+list_reactivation) to call before answering. Answers post back to
+Slack via response_url or are polled by the new "Ask your pipeline"
+dashboard panel. Cost/tokens logged per question.

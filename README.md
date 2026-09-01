@@ -54,6 +54,8 @@ netlify/functions/
   client-proposal.ts     ← public token-scoped view + accept
   reactivation.ts        ← closed-lost queue + approve/reject/send drafts
   reactivation-generate-background.ts  ← Claude drafts Marcus-voiced SMS batch
+  slack-ask.ts           ← Q&A agent entry: Slack slash command or dashboard JSON
+  slack-ask-background.ts ← the agent loop: Claude + 4 read-only DB tools
   leads.ts, catalog.ts   ← reads for the dashboard
   _lib/                  ← supabase client, event logger, slack, http helpers
 supabase/migrations/     ← schema + seed (63-item Phoenix pricing catalog, demo leads)
@@ -84,6 +86,14 @@ Environment variables (documented in [.env.example](./.env.example)): `SUPABASE_
 ## Stretch module: Closed-Lost Reactivation (strategy #3)
 
 Built as a second tab (`/reactivation`): the seeded closed-lost pile (sorted by quoted amount), a "draft next batch" button that has Claude write a personal SMS in Marcus's voice per lead (no emojis, no exclamation marks, discounts only if they were lost on price), and a human approval queue — approve-and-send (Slack simulates the GHL SMS send) or reject. Same background-function + polling pattern, same HITL guarantee: the model drafts, a human sends.
+
+## Bonus: "Ask your pipeline" — an actual agent
+
+The dashboard has an **Ask your pipeline** box, and the same endpoint accepts a Slack slash command (`/ask how much is sitting unsigned?`). This one is a real agent, not a workflow: Claude gets four **read-only** database tools (`pipeline_stats`, `list_leads`, `find_lead`, `list_reactivation`) and decides which to call — looping up to 6 turns — before answering. Answers post back to Slack via `response_url` or land in `assistant_queries` for the dashboard to poll.
+
+The architectural line this draws, deliberately: **where money moves (proposals, outreach), control flow is code-owned** — the model does one constrained, validated step inside a workflow. **Where the task is open-ended reads, the model owns the control flow** — that's what agents are for, and the blast radius is zero because every tool is a SELECT. Cost/tokens are logged per question like everywhere else (~$0.02/question).
+
+To wire the Slack side: create a slash command in your Slack app pointing at `POST https://greenscape-ai-ops.netlify.app/api/slack-ask`. (Demo assumption: Slack request-signature verification is skipped; production verifies `X-Slack-Signature` before trusting the payload.)
 
 ## What I'd build next
 

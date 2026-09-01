@@ -1,10 +1,130 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Lead } from '../lib/types'
 import { LEAD_STATUS, SOURCE_LABEL, money, timeAgo } from '../lib/format'
 import { SIMULATED_LEADS } from '../lib/samples'
 import { Badge, Button, ErrorNote, Panel, Spinner } from '../components/ui'
+
+const ASK_SUGGESTIONS = [
+  'How much proposal value is sitting unsigned right now?',
+  'Which closed-lost leads are worth the most?',
+  'What have we spent on AI so far?',
+]
+
+/**
+ * "Ask your pipeline" — front door to the Q&A agent. POSTs the question,
+ * then polls /api/slack-ask?id= while the background Claude tool-use loop
+ * queries the database. Same agent answers /ask in Slack.
+ */
+function AskPipeline() {
+  const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [answer, setAnswer] = useState<string | null>(null)
+  const [askError, setAskError] = useState('')
+  const pollTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) window.clearTimeout(pollTimer.current)
+    }
+  }, [])
+
+  async function ask(q: string) {
+    const trimmed = q.trim()
+    if (!trimmed || asking) return
+    setAsking(true)
+    setAnswer(null)
+    setAskError('')
+    try {
+      const { query_id } = await api.askPipeline(trimmed)
+      const deadline = Date.now() + 90_000
+      const poll = async () => {
+        try {
+          const status = await api.askStatus(query_id)
+          if (status.status === 'answered') {
+            setAnswer(status.answer ?? '')
+            setAsking(false)
+            return
+          }
+          if (status.status === 'failed') {
+            setAskError(status.answer ?? 'The agent could not answer that.')
+            setAsking(false)
+            return
+          }
+        } catch {
+          // transient poll failure — keep trying until the deadline
+        }
+        if (Date.now() > deadline) {
+          setAskError('Timed out waiting for an answer — try again.')
+          setAsking(false)
+          return
+        }
+        pollTimer.current = window.setTimeout(poll, 2000)
+      }
+      pollTimer.current = window.setTimeout(poll, 2000)
+    } catch (e) {
+      setAskError(e instanceof Error ? e.message : 'Failed to ask')
+      setAsking(false)
+    }
+  }
+
+  return (
+    <Panel className="rise rise-3 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-fog">
+          Ask your pipeline · Claude agent with read-only DB tools
+        </span>
+        <span className="font-mono text-[10px] text-fog/60">also answers /ask in Slack</span>
+      </div>
+      <div className="space-y-3 p-5">
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            ask(question)
+          }}
+        >
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="e.g. which pending proposals are worth the most?"
+            className="min-w-0 flex-1 rounded-lg border border-edge2 bg-panel2 px-4 py-2 text-sm text-bone placeholder:text-fog/50 focus:border-terra focus:outline-none"
+            maxLength={500}
+            disabled={asking}
+          />
+          <Button type="submit" disabled={asking || !question.trim()}>
+            {asking ? <Spinner /> : 'Ask'}
+          </Button>
+        </form>
+        {!asking && !answer && !askError && (
+          <div className="flex flex-wrap gap-2">
+            {ASK_SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setQuestion(s)
+                  ask(s)
+                }}
+                className="rounded-full border border-edge2 bg-panel2 px-3 py-1 font-mono text-[11px] text-fog transition-colors hover:border-fog hover:text-bone"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {asking && <Spinner label="Claude is querying the pipeline…" />}
+        {askError && <ErrorNote message={askError} />}
+        {answer && (
+          <div className="whitespace-pre-wrap rounded-lg border border-terra/30 bg-terra/5 px-4 py-3 text-sm leading-relaxed text-bone">
+            {answer}
+          </div>
+        )}
+      </div>
+    </Panel>
+  )
+}
 
 export default function Dashboard() {
   const [leads, setLeads] = useState<Lead[] | null>(null)
@@ -84,6 +204,8 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      <AskPipeline />
 
       <Panel className="rise rise-2 overflow-hidden">
         <div className="border-b border-edge px-5 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-fog">
