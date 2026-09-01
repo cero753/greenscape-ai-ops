@@ -1,4 +1,3 @@
-import { getSupabase, logEvent } from './_lib/supabase'
 import { json, badRequest, methodNotAllowed, notFound, serverError, withErrors } from './_lib/http'
 
 /**
@@ -12,8 +11,15 @@ import { json, badRequest, methodNotAllowed, notFound, serverError, withErrors }
  *    the UI polls GET /api/slack-ask?id=<query_id> until answered.
  *
  * The actual answering happens in slack-ask-background.ts: a Claude
- * tool-use loop with read-only database tools. This function only records
- * the question and kicks the worker.
+ * tool-use loop with read-only database tools.
+ *
+ * Cold-start note: Slack kills slash commands that don't ack in 3 seconds,
+ * and a cold boot of this function measured 3.07s when the ack path did
+ * DB work (Supabase client init + insert + event log). So the Slack branch
+ * touches no database at all — it validates, forwards the raw question to
+ * the background worker (which acks 202 at the platform level before it
+ * even boots), and replies. The worker inserts the assistant_queries row.
+ * Supabase is loaded via dynamic import so the Slack path never pays for it.
  *
  * Assumption (documented in README): Slack request-signature verification
  * is skipped for the demo; production would verify X-Slack-Signature with
@@ -21,12 +27,11 @@ import { json, badRequest, methodNotAllowed, notFound, serverError, withErrors }
  */
 
 export default withErrors(async (req: Request): Promise<Response> => {
-  const db = getSupabase()
-
   if (req.method === 'GET') {
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return badRequest('id query param required')
-    const { data, error } = await db
+    const { getSupabase } = await import('./_lib/supabase')
+    const { data, error } = await getSupabase()
       .from('assistant_queries')
       .select('id, question, answer, status, created_at, answered_at, generation_cost_usd')
       .eq('id', id)
@@ -70,6 +75,27 @@ export default withErrors(async (req: Request): Promise<Response> => {
       : badRequest('Keep questions under 500 characters')
   }
 
+  const base = process.env.PUBLIC_BASE_URL
+  if (!base) return serverError('PUBLIC_BASE_URL is not configured')
+
+  if (source === 'slack') {
+    // Zero-DB fast path — see cold-start note above. The worker owns the
+    // assistant_queries insert for Slack-originated questions.
+    try {
+      await fetch(`${base}/api/slack-ask-background`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question, asked_by: askedBy, response_url: responseUrl }),
+      })
+    } catch (err) {
+      return json({ response_type: 'ephemeral', text: `Sorry — couldn't start the answer worker. (${String(err)})` })
+    }
+    return json({ response_type: 'ephemeral', text: `🔎 Digging through the pipeline for you…` })
+  }
+
+  // Dashboard path: create the row here so the UI gets a query_id to poll.
+  const { getSupabase, logEvent } = await import('./_lib/supabase')
+  const db = getSupabase()
   const { data: row, error } = await db
     .from('assistant_queries')
     .insert({ question, source, asked_by: askedBy, response_url: responseUrl })
@@ -79,10 +105,6 @@ export default withErrors(async (req: Request): Promise<Response> => {
 
   await logEvent('assistant_query', row.id, 'question_asked', { source, question })
 
-  // Kick the background worker. Background functions ack with 202 instantly,
-  // so awaiting this stays well inside Slack's 3-second reply window.
-  const base = process.env.PUBLIC_BASE_URL
-  if (!base) return serverError('PUBLIC_BASE_URL is not configured')
   try {
     await fetch(`${base}/api/slack-ask-background`, {
       method: 'POST',
@@ -94,8 +116,5 @@ export default withErrors(async (req: Request): Promise<Response> => {
     return serverError(`Failed to start worker: ${String(err)}`)
   }
 
-  if (source === 'slack') {
-    return json({ response_type: 'ephemeral', text: `🔎 Digging through the pipeline for you…` })
-  }
   return json({ query_id: row.id }, 202)
 })

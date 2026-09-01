@@ -1,9 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabase, logEvent } from './_lib/supabase'
-import { json, badRequest, methodNotAllowed, parseBody, withErrors } from './_lib/http'
+import { json, badRequest, methodNotAllowed, parseBody, serverError, withErrors } from './_lib/http'
 
 /**
- * POST /api/slack-ask-background  { query_id: string }
+ * POST /api/slack-ask-background
+ *   { query_id: string }                                  — dashboard flow
+ *   { question, asked_by?, response_url? }                — Slack flow
+ *
+ * Slack questions arrive as the raw payload (not a query_id) because the
+ * entry function's ack path must stay DB-free to beat Slack's 3-second
+ * timeout on cold starts — so this worker owns the assistant_queries
+ * insert for Slack-originated questions.
  *
  * The answering half of the pipeline Q&A agent: a proper agentic tool-use
  * loop. Claude gets four READ-ONLY database tools and decides which to
@@ -156,21 +163,48 @@ Use the tools to look up real data — never guess numbers. Answer concisely for
 
 interface PostBody {
   query_id?: string
+  question?: string
+  asked_by?: string | null
+  response_url?: string | null
 }
 
 export default withErrors(async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return methodNotAllowed()
   const body = await parseBody<PostBody>(req)
-  if (!body?.query_id) return badRequest('query_id is required')
 
   const db = getSupabase()
-  const { data: query, error } = await db
-    .from('assistant_queries')
-    .select('*')
-    .eq('id', body.query_id)
-    .single()
-  if (error || !query) return badRequest('Query not found')
-  if (query.status !== 'running') return json({ ok: true, note: 'Already processed' })
+  let query: { id: string; question: string; response_url: string | null; status: string }
+
+  if (body?.query_id) {
+    // Dashboard flow: the entry function already created the row.
+    const { data, error } = await db
+      .from('assistant_queries')
+      .select('*')
+      .eq('id', body.query_id)
+      .single()
+    if (error || !data) return badRequest('Query not found')
+    if (data.status !== 'running') return json({ ok: true, note: 'Already processed' })
+    query = data
+  } else if (body?.question?.trim()) {
+    // Slack flow: the entry function stayed DB-free to ack fast, so the
+    // row gets created here.
+    const question = body.question.trim().slice(0, 500)
+    const { data, error } = await db
+      .from('assistant_queries')
+      .insert({
+        question,
+        source: 'slack',
+        asked_by: body.asked_by ?? null,
+        response_url: body.response_url ?? null,
+      })
+      .select()
+      .single()
+    if (error) return serverError(error.message)
+    query = data
+    await logEvent('assistant_query', query.id, 'question_asked', { source: 'slack', question })
+  } else {
+    return badRequest('query_id or question is required')
+  }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: query.question }]
