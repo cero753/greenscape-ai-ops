@@ -159,6 +159,24 @@ and drafting the entire 1,400-lead closed-lost graveyard would cost about **$3**
 
 ---
 
+## Addendum — Autopilot (added after the round above)
+
+The opt-in **🤖 Autopilot** toggle (auto-send a draft only when it has zero
+flagged lines) shipped after this test round, so it got its own live check
+against the deployed site:
+
+| Scenario | Result |
+|---|---|
+| Autopilot ON + clean notes (all items on-catalog, in-band) | ✅ Draft came back 9 items / $18,700 / 0 flags → auto-sent: proposal `sent`, lead `proposal_sent`, `proposal_sent` event with `autopilot: true` + client URL, 🤖 Slack ping. No human touch. |
+| Autopilot ON + a flagged line (off-catalog "imported Italian bistro lighting") | ✅ Held at `pending_review` ($11,550, 8 items, 1 flagged, `autopilot_requested: true` logged) — lead stayed `site_walk_done`, Slack notes "autopilot HELD it". The send gate is `flagged == 0 && items > 0 && subtotal > 0`; the guardrails don't relax, they become the gate. |
+| Autopilot ON + garbage notes | ✅ By code order: the `needs_clarification` refusal path returns before the autopilot branch is ever reached. (Garbage refusal itself live-tested in Part 1 §3.) |
+| Autopilot OFF (default) | ✅ Behavior identical to everything verified in Part 1. |
+
+The toggle ships **off by default** deliberately — see README for the
+earn-trust-with-data rollout rationale.
+
+---
+
 ## Known limitations (stated, not hidden)
 
 - **Slack request signatures are not verified** on the `/ask` slash command.
