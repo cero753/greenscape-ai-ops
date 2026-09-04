@@ -1,6 +1,6 @@
 # Greenscape AI Ops — AI Proposal Engine
 
-Turns Marcus's raw site-walk notes into a priced, client-ready proposal in ~30 seconds — constrained to the company's real pricing catalog, flagged where the AI is unsure, and **never sent without human approval**. Built as the #1 agent from [STRATEGY.md](./STRATEGY.md).
+Turns  raw site-walk notes into a priced, client-ready proposal in ~30 seconds — constrained to the company's real pricing catalog, flagged where the AI is unsure, and **never sent without human approval**. Built as the #1 agent from [STRATEGY.md](./STRATEGY.md).
 
 **Live demo:** https://greenscape-ai-ops.netlify.app
 **Stack:** React + Vite + Tailwind v4 · Netlify Functions (TypeScript) · Supabase Postgres · Claude API (`claude-sonnet-4-6`) · Slack incoming webhook
